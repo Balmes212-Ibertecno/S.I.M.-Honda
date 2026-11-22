@@ -104,7 +104,7 @@ const $=s=>document.querySelector(s), eur=n=>Number(n||0).toLocaleString('es-ES'
 let D=null;
 const sel=$('#mod'), on=new Set();
 const norm=v=>String(v??'').trim();
-const key=(a,b)=>norm(a)+'|'+norm(b);
+const key=(a,b)=>norm(a).replace(/\s+/g,'').toUpperCase()+'|'+norm(b).replace(/\s+/g,'').toUpperCase();
 const num=v=>{if(typeof v==='number')return v; if(v==null||v==='')return 0; return Number(String(v).replace(',','.'))||0};
 function rows(wb,name){const ws=wb.Sheets[name];return ws?XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true}):[]}
 function records(a){return a.slice(1).filter(r=>r && r.some(v=>v!==null && v!==''));}
@@ -134,7 +134,7 @@ function setStatus(s,err=false){$('#status').textContent=s;$('#status').style.co
 const SUM_CODES=new Set(['A','B','2','3','4','5','6','7','8','9']);
 const AUTO_CODES=new Set(['RESI1','RESI2','ZZGVT']);
 const NOHOURS=new Set(['FRD1','FRD2','FRT1','FRT2']);
-const cu=c=>norm(c).toUpperCase();
+const cu=c=>norm(c).replace(/\s+/g,'').toUpperCase();
 function render(){
  if(!D){$('#pk').innerHTML='';$('#tb').innerHTML='<tr class="empty"><td colspan="6">Cargando el Excel publicado…</td></tr>';return;}
  const sc=$('#pk').scrollTop;
@@ -168,7 +168,16 @@ function render(){
    if(chk)h+=line(c,p,o,showH);
   });
  });
- if(mainOn)D.codes.forEach(c=>{if(AUTO_CODES.has(cu(c.c))){const p=planOf(c);p.operations.forEach(o=>{h+=line(c,p,o,true)})}});
+ if(mainOn){
+  let found=0;
+  ['RESI1','RESI2','ZZGVT'].forEach(rc=>{
+   let p=D.plan[key(m.id,rc)];
+   if(!p){const k=Object.keys(D.plan).find(k=>k.split('|')[1]===rc);if(k)p=D.plan[k];} // sin plan propio para este modelo: usa el general
+   if(!p)return;
+   p.operations.forEach(o=>{h+=line({c:rc},p,o,true);found++});
+  });
+  if(!found)h+='<tr><td colspan="6" style="color:#b00020">Aviso: no se han encontrado RESI1, RESI2 ni ZZGVT en la hoja Plan del Excel.</td></tr>';
+ }
  $('#pk').innerHTML=`<div class="tiles">${tiles}</div>${groups?'<div class="grp">Frenos</div>'+groups:''}`;
  $('#pk').scrollTop=sc;
  $('#tb').innerHTML=n?h:'<tr class="empty"><td colspan="6">Marca las operaciones que quieras presupuestar</td></tr>';
