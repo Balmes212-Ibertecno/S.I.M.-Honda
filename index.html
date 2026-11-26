@@ -148,6 +148,8 @@ function setStatus(s,err=false){$('#status').textContent=s;$('#status').style.co
 const SUM_CODES=new Set(['A','B','2','3','4','5','6','7','8','9']);
 const AUTO_CODES=new Set(['RESI1','RESI2','ZZGVT']);
 const NOHOURS=new Set([]);   // códigos que no muestran horas (ahora todos las muestran, también los frenos)
+const DTO_ACEITE=21;   // % de descuento fijo en el aceite de motor (Aceite 0W20, 0W30…)
+const esAceiteMotor=i=>/^\s*aceite\s+\d+\s*w\s*-?\s*\d+/i.test(i.d||'');
 const RESI2_PCT=0.03, RESI2_TOPE=18;   // Residuos no aceites: 3 % de los recambios con tope de 18 € (regla de la hoja Presupuesto del Excel)
 const cu=c=>norm(c).toUpperCase();
 // Secciones que van debajo de los códigos de mantenimiento, en este orden:
@@ -169,22 +171,24 @@ function render(){
 const dp=k=>Math.min(100,Math.max(0,num(DT[k])));
  const dinp=k=>`<span class="np dtb">Dto <input class="dt" inputmode="decimal" data-dk="${esc(k)}" value="${esc(DT[k]??'')}" placeholder="0"> %</span>`;
  const pc=d=>d.toLocaleString('es-ES',{maximumFractionDigits:2});
- const amt=(g,d)=>d>0?`${eur(g*(1-d/100))}<div class="dd">${eur(g)} −${pc(d)}%</div>`:eur(g);
+ const amt=(g,d)=>d>0?`${eur(g*(1-d/100))}<div class="dd">${eur(g)}</div>`:eur(g);
  const line=(c,p,o,showH)=>{
   // Si el código tiene una sola operación se cogen todos sus recambios (como hace la hoja Presupuesto del Excel); si tiene varias, se casan por id de operación
   const items=p.operations.length===1?p.items:p.items.filter(i=>i.opId===o.id);
   const kmo='mo|'+o.key,dm=dp(kmo),mo=o.h*D.rate;
   const krc='rc|'+o.key,dr=dp(krc);   // un solo descuento de recambios por operación
-  let rcG=0,sub='';
+  let rcG=0,oilG=0,sub='';
   items.forEach((i,k)=>{
-   const g=i.q*i.p;rcG+=g;
-   sub+=`<tr class="det${k===items.length-1?' last':''}${det?'':' np'}"><td></td><td>${esc(i.d)} <span>(${esc(i.r)})</span></td><td class="n">${i.q}×</td><td class="n">${eur(i.p)}</td><td class="n">${eur(g)}</td><td></td></tr>`;
+   const g=i.q*i.p,oil=esAceiteMotor(i);rcG+=g;if(oil)oilG+=g;
+   const gTxt=oil?`${eur(g*(1-DTO_ACEITE/100))}<div class="dd">${eur(g)}</div>`:eur(g);   // aceite de motor: dto fijo
+   sub+=`<tr class="det${k===items.length-1?' last':''}${det?'':' np'}"><td></td><td>${esc(i.d)} <span>(${esc(i.r)})</span></td><td class="n">${i.q}×</td><td class="n">${eur(i.p)}</td><td class="n">${gTxt}</td><td></td></tr>`;
   });
-  const rcN=rcG*(1-dr/100);
+  const restG=rcG-oilG;   // el descuento manual de recambios se aplica al resto de recambios; el aceite siempre lleva su dto fijo
+  const rcN=oilG*(1-DTO_ACEITE/100)+restG*(1-dr/100);
   moT+=mo;rcT+=rcG;dMo+=mo*dm/100;dRc+=rcG-rcN;n++;
   const tot=mo*(1-dm/100)+rcN;
   const rcTxt=rcN<rcG?`${eur(rcN)}<div class="dd">${eur(rcG)}</div>`:eur(rcG);
-  return `<tr><td>${esc(c.c)}</td><td>${esc(o.name)}</td><td class="n">${showH?o.h.toLocaleString('es-ES'):''}</td><td class="n"><div class="amtrow"><div>${amt(mo,dm)}</div>${mo>0?dinp(kmo):''}</div></td><td class="n"><div class="amtrow"><div>${rcTxt}</div>${rcG>0?dinp(krc):''}</div></td><td class="n"><b>${eur(tot)}</b></td></tr>`+sub;
+  return `<tr><td>${esc(c.c)}</td><td>${esc(o.name)}</td><td class="n">${showH?o.h.toLocaleString('es-ES'):''}</td><td class="n"><div class="amtrow"><div>${amt(mo,dm)}</div>${mo>0?dinp(kmo):''}</div></td><td class="n"><div class="amtrow"><div>${rcTxt}</div>${restG>0?dinp(krc):''}</div></td><td class="n"><b>${eur(tot)}</b></td></tr>`+sub;
  };
  D.codes.forEach(c=>{
   const u=cu(c.c),p=planOf(c),ops=p.operations;
