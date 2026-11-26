@@ -50,8 +50,9 @@ tr.det.last td{border-bottom:1px solid var(--l);padding-bottom:6px}
 .opt input{width:auto}
 button{background:var(--r);color:#fff;border:0;border-radius:6px;padding:10px 18px;font:600 14px inherit;cursor:pointer}
 .dd{font-size:11px;color:var(--m);text-decoration:line-through;font-weight:400}
-.dtb{display:block;font-size:11px;color:var(--m);margin-top:3px;font-weight:400}
-.dt{width:54px;padding:3px 5px;font-size:12px;text-align:right}
+.dtb{display:inline-flex;align-items:center;gap:3px;white-space:nowrap;font-size:11px;color:var(--m);margin:0 0 0 8px;font-weight:400}
+.amtrow{display:flex;align-items:center;justify-content:flex-end}
+.dt{width:46px;padding:3px 5px;font-size:12px;text-align:right}
 button.sec{background:#fff;color:var(--t);border:1px solid #c9c9c9;padding:7px 12px;font-weight:500;font-size:13px}
 .note{font-size:12px;color:var(--m);margin-top:14px}
 #obsP{white-space:pre-wrap;display:none}
@@ -129,7 +130,7 @@ function parseWorkbook(wb){
  const rate=num(param[1]?.[1]), iva=num(param[2]?.[1]);
  const partMap=new Map(parts.map(r=>[norm(r[cRef]),{d:norm(r[cDes]),p:num(r[cPre])}]));
  const opMap=new Map(ops.map(r=>[norm(r[0]),norm(r[1])]));
- const data={rate,iva,models:models.map(r=>({id:norm(r[0]),n:norm(r[1]),g:norm(r[2]),m:norm(r[3])})),
+ const data={rate,iva,parts:Object.fromEntries(partMap),models:models.map(r=>({id:norm(r[0]),n:norm(r[1]),g:norm(r[2]),m:norm(r[3])})),
  codes:codes.map(r=>({c:norm(r[0]),d:norm(r[1])})),plan:{}};
  plan.forEach((r,i)=>{
   const k=key(r[0],r[1]); if(!data.plan[k])data.plan[k]={operations:[],items:[],exists:true};
@@ -147,6 +148,7 @@ function setStatus(s,err=false){$('#status').textContent=s;$('#status').style.co
 const SUM_CODES=new Set(['A','B','2','3','4','5','6','7','8','9']);
 const AUTO_CODES=new Set(['RESI1','RESI2','ZZGVT']);
 const NOHOURS=new Set(['FRD1','FRD2','FRT1','FRT2']);
+const RESI2_PCT=0.03, RESI2_TOPE=18;   // Residuos no aceites: 3 % de los recambios con tope de 18 € (regla de la hoja Presupuesto del Excel)
 const cu=c=>norm(c).toUpperCase();
 // Secciones que van debajo de los códigos de mantenimiento, en este orden:
 const SECTIONS=[
@@ -169,16 +171,20 @@ const dp=k=>Math.min(100,Math.max(0,num(DT[k])));
  const pc=d=>d.toLocaleString('es-ES',{maximumFractionDigits:2});
  const amt=(g,d)=>d>0?`${eur(g*(1-d/100))}<div class="dd">${eur(g)} −${pc(d)}%</div>`:eur(g);
  const line=(c,p,o,showH)=>{
-  const items=p.items.filter(i=>i.opId===o.id);
+  // Si el código tiene una sola operación se cogen todos sus recambios (como hace la hoja Presupuesto del Excel); si tiene varias, se casan por id de operación
+  const items=p.operations.length===1?p.items:p.items.filter(i=>i.opId===o.id);
   const kmo='mo|'+o.key,dm=dp(kmo),mo=o.h*D.rate;
-  let rcG=0,rcN=0,sub='';
+  const krc='rc|'+o.key,dr=dp(krc);   // un solo descuento de recambios por operación
+  let rcG=0,sub='';
   items.forEach((i,k)=>{
-   const ki='rc|'+o.key+'|'+k,di=dp(ki),g=i.q*i.p;rcG+=g;rcN+=g*(1-di/100);
-   sub+=`<tr class="det${k===items.length-1?' last':''}${det?'':' np'}"><td></td><td>${esc(i.d)} <span>(${esc(i.r)})</span></td><td class="n">${i.q}×</td><td class="n">${eur(i.p)}</td><td class="n">${amt(g,di)}</td><td class="n">${dinp(ki)}</td></tr>`;
+   const g=i.q*i.p;rcG+=g;
+   sub+=`<tr class="det${k===items.length-1?' last':''}${det?'':' np'}"><td></td><td>${esc(i.d)} <span>(${esc(i.r)})</span></td><td class="n">${i.q}×</td><td class="n">${eur(i.p)}</td><td class="n">${eur(g)}</td><td></td></tr>`;
   });
+  const rcN=rcG*(1-dr/100);
   moT+=mo;rcT+=rcG;dMo+=mo*dm/100;dRc+=rcG-rcN;n++;
   const tot=mo*(1-dm/100)+rcN;
-  return `<tr><td>${esc(c.c)}</td><td>${esc(o.name)}</td><td class="n">${showH?o.h.toLocaleString('es-ES'):''}</td><td class="n">${amt(mo,dm)}${mo>0?dinp(kmo):''}</td><td class="n">${rcN<rcG?`${eur(rcN)}<div class="dd">${eur(rcG)}</div>`:eur(rcG)}</td><td class="n"><b>${eur(tot)}</b></td></tr>`+sub;
+  const rcTxt=rcN<rcG?`${eur(rcN)}<div class="dd">${eur(rcG)}</div>`:eur(rcG);
+  return `<tr><td>${esc(c.c)}</td><td>${esc(o.name)}</td><td class="n">${showH?o.h.toLocaleString('es-ES'):''}</td><td class="n"><div class="amtrow"><div>${amt(mo,dm)}</div>${mo>0?dinp(kmo):''}</div></td><td class="n"><div class="amtrow"><div>${rcTxt}</div>${rcG>0?dinp(krc):''}</div></td><td class="n"><b>${eur(tot)}</b></td></tr>`+sub;
  };
  D.codes.forEach(c=>{
   const u=cu(c.c),p=planOf(c),ops=p.operations;
@@ -213,7 +219,19 @@ const dp=k=>Math.min(100,Math.max(0,num(DT[k])));
   p.operations.forEach(o=>{otros+=opRow(c,p,o,showH)});
  });
  if(otros)groups+='<div class="grp">Otros</div>'+otros;
- if(mainOn)D.codes.forEach(c=>{if(AUTO_CODES.has(cu(c.c))){const p=planOf(c);p.operations.forEach(o=>{h+=line(c,p,o,true)})}});
+ if(mainOn){
+  // Canon aceite usado, residuos y pequeño material: se añaden al presupuesto cuando hay mantenimiento (A, B, 2-9)
+  const rcBase=rcT, price=(ref,def)=>{const x=D.parts&&D.parts[ref];return x&&x.p>0?x.p:def};
+  const fixedLine=(code,desc,amount)=>{rcT+=amount;n++;
+   return `<tr><td>${esc(code)}</td><td>${esc(desc)}</td><td class="n"></td><td class="n"></td><td class="n">${eur(amount)}</td><td class="n"><b>${eur(amount)}</b></td></tr>`};
+  D.codes.forEach(c=>{
+   const u=cu(c.c); if(!AUTO_CODES.has(u))return;
+   const p=planOf(c);
+   if(p.operations.length){p.operations.forEach(o=>{h+=line(c,p,o,true)});return}   // si el Excel trae Plan para estos códigos, se usa
+   const amount=u==='RESI2'?Math.min(rcBase*RESI2_PCT,RESI2_TOPE):price(u,u==='RESI1'?0.6:4);
+   h+=fixedLine(c.c,c.d||LABELS[u]||u,amount);
+  });
+ }
  $('#pk').innerHTML=`<div class="tiles">${tiles}</div>${groups}`;
  $('#pk').scrollTop=sc;
  $('#tb').innerHTML=n?h:'<tr class="empty"><td colspan="6">Marca las operaciones que quieras presupuestar</td></tr>';
