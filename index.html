@@ -147,7 +147,7 @@ function parseWorkbook(wb){
 function setStatus(s,err=false){$('#status').textContent=s;$('#status').style.color=err?'#b00020':'#555'}
 const SUM_CODES=new Set(['A','B','2','3','4','5','6','7','8','9']);
 const AUTO_CODES=new Set(['RESI1','RESI2','ZZGVT']);
-const NOHOURS=new Set(['FRD1','FRD2','FRT1','FRT2']);
+const NOHOURS=new Set([]);   // códigos que no muestran horas (ahora todos las muestran, también los frenos)
 const RESI2_PCT=0.03, RESI2_TOPE=18;   // Residuos no aceites: 3 % de los recambios con tope de 18 € (regla de la hoja Presupuesto del Excel)
 const cu=c=>norm(c).toUpperCase();
 // Secciones que van debajo de los códigos de mantenimiento, en este orden:
